@@ -16,20 +16,40 @@
  package org.jenkinsci.plugins.stashNotifier;
  
 import hudson.EnvVars;
-import hudson.Launcher;
 import hudson.Extension;
-import hudson.util.FormValidation;
+import hudson.Launcher;
 import hudson.ProxyConfiguration;
-import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
-import hudson.model.AbstractProject;
 import hudson.model.Result;
+import hudson.model.AbstractBuild;
+import hudson.model.AbstractProject;
+import hudson.model.Descriptor;
 import hudson.plugins.git.util.BuildData;
-import hudson.tasks.Publisher;
-import hudson.tasks.Notifier;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
+import hudson.tasks.Notifier;
+import hudson.tasks.Publisher;
+import hudson.util.FormValidation;
 import hudson.util.Secret;
+
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URL;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.util.Properties;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.servlet.ServletException;
+
+import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 
 import org.apache.commons.lang.StringEscapeUtils;
@@ -52,28 +72,10 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.conn.SingleClientConnManager;
 import org.apache.http.util.EntityUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.StaplerRequest;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.TrustManager;
-import javax.servlet.ServletException;
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.security.KeyStoreException;
-import java.security.UnrecoverableKeyException;
-
-import jenkins.model.Jenkins;
-
+import com.google.common.collect.ImmutableBiMap.Builder;
 /**
  * Notifies a configured Atlassian Stash server instance of build results
  * through the Stash build API.
@@ -102,9 +104,27 @@ public class StashNotifier extends Notifier {
 	/** if true, the build number is included in the Stash notification. */
 	private final boolean includeBuildNumberInKey;
 	
+	/** if true, set the stash build status to INPROGRESS when the build starts  */
+    private final boolean setInProgress;
+    
+    /** read this file to get the stash SHA to set the build for */
+    private final String shaFile;
+    
+    /** use this value for the build key  */
+    private final String keyName;
+    
+    /** use this value for the build name */
+    private final String buildName;
+    
+    /** use this value for the build description */
+    private final String buildDescription; 
+	
+    /** description */
+    //private final String bar; 
+
 	// public members ----------------------------------------------------------
 
-	public BuildStepMonitor getRequiredMonitorService() {
+    public BuildStepMonitor getRequiredMonitorService() {
 		return BuildStepMonitor.BUILD;
 	}
 
@@ -115,7 +135,12 @@ public class StashNotifier extends Notifier {
 			String stashUserPassword,
 			boolean ignoreUnverifiedSSLPeer,
 			String commitSha1,
-			boolean includeBuildNumberInKey) {
+			boolean includeBuildNumberInKey,
+			boolean setInProgress,
+			String shaFile,
+			String keyName,
+			String buildName,
+			String buildDescription) {
 		this.stashServerBaseUrl = stashServerBaseUrl;
 		this.stashUserName = stashUserName;
 		this.stashUserPassword = stashUserPassword;
@@ -123,8 +148,17 @@ public class StashNotifier extends Notifier {
 			= ignoreUnverifiedSSLPeer;
 		this.commitSha1 = commitSha1;
 		this.includeBuildNumberInKey = includeBuildNumberInKey;
+		this.setInProgress = setInProgress;
+		this.shaFile = shaFile;
+		System.out.println("shaFile : " + (shaFile == null ? "null" : shaFile));
+		this.keyName = keyName;
+		this.buildName = buildName;
+		this.buildDescription = buildDescription;
+		//this.bar = bar;
+		//System.out.println("bar : " + bar);
+		
 	}
-
+    
 	public String getStashServerBaseUrl() {
 		return stashServerBaseUrl;
 	}
@@ -149,9 +183,32 @@ public class StashNotifier extends Notifier {
 		return includeBuildNumberInKey;
 	}
 	
-	@Override
+	public boolean isSetInProgress() {
+        return setInProgress;
+    }
+
+    public String getShaFile() {
+        return shaFile;
+    }
+
+    public String getKeyName() {
+        return keyName;
+    }
+
+    public String getBuildName() {
+        return buildName;
+    }
+
+    public String getBuildDescription() {
+        return buildDescription;
+    }
+
+    @Override
 	public boolean prebuild(AbstractBuild<?, ?> build, BuildListener listener) {
-		return processJenkinsEvent(build, listener, StashBuildState.INPROGRESS);
+        if(isSetInProgress())
+            return processJenkinsEvent(build, listener, StashBuildState.INPROGRESS);
+        else
+            return true;
 	}
 	
 	@Override
@@ -196,6 +253,7 @@ public class StashNotifier extends Notifier {
 		}
 
 		String commitSha1 = lookupCommitSha1(build, listener);
+		logger.println("using sha : " + commitSha1);
 		if  (commitSha1 != null) {
 			try {
 				NotificationResult result 
@@ -227,36 +285,70 @@ public class StashNotifier extends Notifier {
 		return true;
 	}
 
+	/**
+	 * There are 3 ways to specify a commit sha: pass it in directly, 
+	 * specify a properties file with the sha, get the sha from the 
+	 * jenkins git plugin
+	 * @param build
+	 * @param listener
+	 * @return
+	 */
 	private String lookupCommitSha1(
 			@SuppressWarnings("rawtypes") AbstractBuild build, 
 			BuildListener listener) {
-		
-		if (commitSha1 != null && commitSha1.trim().length() > 0) {
-			PrintStream logger = listener.getLogger();
-			try {
-				EnvVars environment = build.getEnvironment(listener);
+        PrintStream logger = listener.getLogger();
+        EnvVars environment;
+        try {
+            environment = build.getEnvironment(listener);
+        } catch (IOException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+            return null;
+        } catch (InterruptedException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+            return null;
+        }
+        
+	    // use the shaFile to find the commit sha
+	    if(shaFile != null && shaFile.trim().length() > 0) {
+	        logger.println("getting sha from props file : " + shaFile);
+	        return getShaFromFile(shaFile, environment);//build.getBuildVariables());
+	    }
+	    else if (commitSha1 != null && commitSha1.trim().length() > 0) {
 				return environment.expand(commitSha1);
-			} catch (IOException e) {
-				logger.println("Unable to expand commit SHA value");
-				e.printStackTrace(logger);
-				return null;
-			} catch (InterruptedException e) {
-				logger.println("Unable to expand commit SHA value");
-				e.printStackTrace(logger);
-				return null;
-			}
 		}
-		
-		// get the sha1 of the commit that was built
-		BuildData buildData = (BuildData) build.getAction(BuildData.class);
-		if  (buildData != null) {
-			return buildData.getLastBuiltRevision().getSha1String();
-		}
-
+	    else {
+	        // get the sha1 of the commit that was built
+	        BuildData buildData = (BuildData) build.getAction(BuildData.class);
+	        if  (buildData != null) {
+	            return buildData.getLastBuiltRevision().getSha1String();
+	        }
+	    }
 		return null;
 	}
 
-	/**
+	private String getShaFromFile(String shaFile, EnvVars environment) {
+	    // expand any jenkins parameters first	    
+        shaFile = environment.expand(shaFile);
+	    
+	    //shaFile = substituteParameters(shaFile, buildVars);
+	    Properties prop = new Properties(); 
+	    try {
+            prop.load(new FileInputStream(shaFile));
+        } catch (FileNotFoundException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return null;
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+            return null;
+        }
+	    return prop.getProperty("sha");
+    }
+
+    /**
 	 * Returns the HttpClient through which the REST call is made. Uses an
 	 * unsafe TrustStrategy in case the user specified a HTTPS URL and
 	 * set the ignoreUnverifiedSSLPeer flag.
@@ -577,7 +669,7 @@ public class StashNotifier extends Notifier {
 
         json.put("state", state.name());
 
-        json.put("key", getBuildKey(build));
+        json.put("key", keyName != null ? keyName : getBuildKey(build));
 
         // This is to replace the odd character Jenkins injects to separate 
         // nested jobs, especially when using the Cloudbees Folders plugin. 
@@ -585,9 +677,10 @@ public class StashNotifier extends Notifier {
         String fullName = StringEscapeUtils.
                 escapeJavaScript(build.getFullDisplayName()).
                 replaceAll("\\\\u00BB", "\\/");
-        json.put("name", fullName);
+        json.put("name", buildName == null ? buildName : fullName);
 
-        json.put("description", getBuildDescription(build, state));
+        json.put("description", buildDescription != null ? 
+                buildDescription : getBuildDescription(build, state));
         json.put("url", Jenkins.getInstance()
         		.getRootUrl().concat(build.getUrl()));
         

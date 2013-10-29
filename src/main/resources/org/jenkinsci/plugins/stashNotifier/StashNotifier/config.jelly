@@ -5,7 +5,15 @@
   	- Stash user name
   	- Stash password
   	- Ignore unverified SSL certificate flag
-  -->
+-->
+<f:entry title="Get the SHA from a properties file">
+    <f:textbox field="shaFile" title="Enter the location of the SHA file"/>
+</f:entry>
+    
+<f:entry title="Specify the SHA">
+    <f:textbox field="commitSha1" title="Enter the SHA"/>    
+</f:entry>
+
  <f:advanced>
   <f:entry title="Stash base URL" field="stashServerBaseUrl">
     <f:textbox />
@@ -16,9 +24,6 @@
    <f:entry title="Stash user password" field="stashUserPassword">
     <f:password />
    </f:entry>
-   <f:entry title="Commit SHA-1" field="commitSha1">
-    <f:textbox />
-  </f:entry>
    <f:entry title="Ignore unverified SSL certificates" 
    		field="ignoreUnverifiedSSLPeer">
     <f:checkbox />
@@ -26,5 +31,17 @@
   <f:entry title="Keep repeated builds in Stash" field="includeBuildNumberInKey">
     <f:checkbox />
   </f:entry>
+  <f:entry title="Set INPROGRESS when build starts" field="setInProgress">
+    <f:checkbox />
+  </f:entry>
+  <f:entry title="Key Name" field="keyName">
+    <f:textbox />
+  </f:entry>
+  <f:entry title="Build Name" field="buildName">
+    <f:textbox />
+  </f:entry>
+  <f:entry title="Build Description" field="buildDescription">
+    <f:textbox />
+  </f:entry>  
  </f:advanced>
 </j:jelly>
