@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package org.jenkinsci.plugins.stashNotifier;
+package org.jenkinsci.plugins.stashNotifier;
  
 import hudson.EnvVars;
 import hudson.Extension;
@@ -76,6 +76,27 @@ import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 
 import com.google.common.collect.ImmutableBiMap.Builder;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.TrustManager;
+import javax.servlet.ServletException;
+
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.URL;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.security.KeyStoreException;
+import java.security.UnrecoverableKeyException;
+import java.util.regex.Pattern;
+
+import jenkins.model.Jenkins;
+
+>>>>>>> bf0ee1981348a7cbaefd37b2bed27cdc6e30d50e
 /**
  * Notifies a configured Atlassian Stash server instance of build results
  * through the Stash build API.
@@ -118,9 +139,6 @@ public class StashNotifier extends Notifier {
     
     /** use this value for the build description */
     private final String buildDescription; 
-	
-    /** description */
-    //private final String bar; 
 
 	// public members ----------------------------------------------------------
 
@@ -402,13 +420,37 @@ public class StashNotifier extends Notifier {
 		}
 		
 		ProxyConfiguration proxy = Jenkins.getInstance().proxy;
-		if(proxy != null && !proxy.name.isEmpty() && !proxy.name.startsWith("http")){
+		if(proxy != null && !proxy.name.isEmpty() && !proxy.name.startsWith("http") && !isHostOnNoProxyList(proxy)){
 			SchemeRegistry schemeRegistry = client.getConnectionManager().getSchemeRegistry();
 			schemeRegistry.register(new Scheme("http", proxy.port, new PlainSocketFactory()));
 			client.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, new HttpHost(proxy.name, proxy.port));
 		}
 		
 		return client;
+	}
+	
+	/**
+	 * Returns whether or not the stash host is on the noProxy list
+	 * as defined in the Jenkins proxy settings
+	 * 
+	 * @param host     the stash URL
+	 * @param proxy    the ProxyConfiguration
+	 * @return         whether or not the host is on the noProxy list
+	 */
+	private boolean isHostOnNoProxyList(ProxyConfiguration proxy) {
+	    String host = getStashServerBaseUrl();
+	    if ("".equals(host) || host == null) {
+	        DescriptorImpl descriptor = getDescriptor();
+	        host = descriptor.getStashRootUrl();
+	    }
+	    if (host != null && proxy.noProxyHost != null) {
+            for (Pattern p : ProxyConfiguration.getNoProxyHostPatterns(proxy.noProxyHost)) {
+                if (p.matcher(host).matches()) {
+                    return true;
+                }
+            }
+	    }
+	    return false;
 	}
 
     /**
