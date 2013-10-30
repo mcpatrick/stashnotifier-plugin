@@ -45,6 +45,7 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Properties;
+import java.util.regex.Pattern;
 
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.servlet.ServletException;
@@ -76,27 +77,9 @@ import org.kohsuke.stapler.QueryParameter;
 import org.kohsuke.stapler.StaplerRequest;
 
 import com.google.common.collect.ImmutableBiMap.Builder;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.TrustManager;
-import javax.servlet.ServletException;
 
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.security.KeyStoreException;
-import java.security.UnrecoverableKeyException;
-import java.util.regex.Pattern;
+import org.jenkinsci.plugins.stashNotifier.StashBuildState;
 
-import jenkins.model.Jenkins;
-
->>>>>>> bf0ee1981348a7cbaefd37b2bed27cdc6e30d50e
 /**
  * Notifies a configured Atlassian Stash server instance of build results
  * through the Stash build API.
