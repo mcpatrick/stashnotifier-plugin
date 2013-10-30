@@ -150,13 +150,9 @@ public class StashNotifier extends Notifier {
 		this.includeBuildNumberInKey = includeBuildNumberInKey;
 		this.setInProgress = setInProgress;
 		this.shaFile = shaFile;
-		System.out.println("shaFile : " + (shaFile == null ? "null" : shaFile));
 		this.keyName = keyName;
 		this.buildName = buildName;
-		this.buildDescription = buildDescription;
-		//this.bar = bar;
-		//System.out.println("bar : " + bar);
-		
+		this.buildDescription = buildDescription;	
 	}
     
 	public String getStashServerBaseUrl() {
