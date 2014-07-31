@@ -5,7 +5,7 @@ This Jenkins plugin notifies Stash of build results. Failed or
 successful builds will show up as little icons in the Stash web 
 interface in commit logs. Clicking on such an icon will take the 
 user to the specific build:
-![alt tag](https://git@github.com:mcpatrick/stashnotifier-plugin.git/build-status.png)
+![alt tag](https://github.com/mcpatrick/stashnotifier-plugin/blob/tmp/build-status.png)
 
 Requirements
 ============
